@@ -12,6 +12,7 @@
 		SUBJECTS
 	} from '../lib/subjects';
 	import { DEFAULT_TOPIC, makeId, type SetupQuestion } from '../lib/setup';
+	import { generatePlan, type StudyPlan } from '../lib/plan';
 
 	type View = 'setup' | 'plan' | 'progress';
 	const VIEWS: View[] = ['setup', 'plan', 'progress'];
@@ -23,6 +24,8 @@
 	let questions: Record<string, SetupQuestion[]> = $state({});
 	let error: string = $state('');
 	let view: View = $state('setup');
+	let plan: StudyPlan | null = $state(null);
+	let activeDay: number = $state(0);
 	let toast: string = $state('');
 	let toastTimer: ReturnType<typeof setTimeout> | undefined;
 
@@ -82,9 +85,53 @@
 		}
 		clampSetup();
 		error = '';
-		// Plan generation lands with T2; for now confirm valid intake and preview it.
+		const subjectNames: Record<string, string> = {};
+		for (const subject of SUBJECTS) subjectNames[subject.id] = subject.name;
+		const questionsBySubject: Record<string, SetupQuestion[]> = {};
+		for (const id of valid)
+			questionsBySubject[id] = (questions[id] ?? []).filter((q) => q.title.trim());
+		plan = generatePlan({ questionsBySubject, subjectIds: valid, subjectNames, days, hours });
+		activeDay = 0;
 		setView('plan');
-		showToast('Setup looks good. Plan generation arrives in the next slice.');
+		showToast('Your study plan is ready.');
+	}
+
+	function planTasks() {
+		return plan ? plan.days.flatMap((day) => day.tasks) : [];
+	}
+
+	function planDone(): number {
+		return planTasks().filter((task) => task.done).length;
+	}
+
+	function planTotal(): number {
+		return planTasks().length;
+	}
+
+	function planPercent(): number {
+		const total = planTotal();
+		return total ? Math.round((planDone() / total) * 100) : 0;
+	}
+
+	function selectDay(index: number): void {
+		if (!plan) return;
+		activeDay = Math.max(0, Math.min(index, plan.days.length - 1));
+	}
+
+	function currentDay() {
+		if (!plan) return null;
+		return plan.days[Math.max(0, Math.min(activeDay, plan.days.length - 1))];
+	}
+
+	function toggleTask(taskId: string, done: boolean): void {
+		if (!plan) return;
+		for (const day of plan.days) {
+			const task = day.tasks.find((t) => t.id === taskId);
+			if (task) {
+				task.done = done;
+				break;
+			}
+		}
 	}
 
 	function clearSetup(): void {
@@ -94,6 +141,8 @@
 		drafts = {};
 		questions = {};
 		error = '';
+		plan = null;
+		activeDay = 0;
 		showToast('Setup cleared.');
 	}
 
@@ -283,20 +332,88 @@
 				<div class="panel-head">
 					<div>
 						<h2>Your study plan</h2>
-						<p class="panel-note">
-							{#if totalQuestions() > 0}
-								{days} days · {selected.length} subjects · {hours} hours available each day · {totalQuestions()}
-								{totalQuestions() === 1 ? 'question' : 'questions'} ready.
+						<p class="panel-note" id="plan-subtitle">
+							{#if plan}
+								{plan.days.length} days · {plan.subjectIds.length} subjects · {plan.hours} hours available each day
 							{:else}
 								A day-by-day checklist, balanced across your subjects.
 							{/if}
 						</p>
 					</div>
 				</div>
-				<div class="empty-state">
-					Your plan will appear here after you generate it from Setup. Day-by-day checklists land
-					with the plan generator slice.
-				</div>
+				{#if plan && currentDay()}
+					{@const done = planDone()}
+					{@const total = planTotal()}
+					{@const day = currentDay()!}
+					{@const dayDone = day.tasks.filter((t) => t.done).length}
+					<div class="plan-summary">
+						<div class="summary-cell">
+							<span class="summary-label">Days left</span><span class="summary-value"
+								>{plan.days.length}</span
+							>
+						</div>
+						<div class="summary-cell">
+							<span class="summary-label">Completed</span><span class="summary-value"
+								>{done} / {total}</span
+							>
+						</div>
+						<div class="summary-cell">
+							<span class="summary-label">Overall</span><span class="summary-value"
+								>{planPercent()}%</span
+							>
+						</div>
+					</div>
+					<div class="day-strip" role="tablist" aria-label="Choose a study day">
+						{#each plan.days as planDay, index (index)}
+							{@const count = planDay.tasks.filter((t) => t.done).length}
+							<button
+								class="day-button"
+								type="button"
+								role="tab"
+								aria-pressed={index === activeDay}
+								aria-label="{planDay.isRevision
+									? 'Revision'
+									: `Day ${index + 1}`}, {count} of {planDay.tasks.length} tasks complete"
+								onclick={() => selectDay(index)}
+								><span class="day-n">{planDay.isRevision ? 'Review' : `Day ${index + 1}`}</span
+								><span class="day-count">{count}/{planDay.tasks.length} done</span></button
+							>
+						{/each}
+					</div>
+					<div class="day-title-row">
+						<h3>{day.isRevision ? 'Final review' : `Day ${activeDay + 1}`}</h3>
+						<span class="day-meta">{dayDone} of {day.tasks.length} complete</span>
+					</div>
+					<div class="task-list">
+						{#each day.tasks as task (task.id)}
+							<label class="task" class:done={task.done}>
+								<input
+									type="checkbox"
+									checked={task.done}
+									aria-label="Mark {task.title} {task.done ? 'not done' : 'done'}"
+									onchange={(e) => toggleTask(task.id, e.currentTarget.checked)}
+								/>
+								<span>
+									<span class="task-title">{task.title}</span>
+									<span class="task-sub">
+										<span class="task-subject">{task.subjectName}</span>
+										<span>{task.topic}</span>
+										{#if task.isRevision}<span>Revision / mock</span>{/if}
+									</span>
+								</span>
+								<span class="task-duration">{task.minutes} min</span>
+							</label>
+						{:else}
+							<p class="empty-day">
+								Nothing scheduled for this day. Catch up on other days to stay on track.
+							</p>
+						{/each}
+					</div>
+				{:else}
+					<div class="empty-state">
+						Your plan will appear here after you generate it from Setup.
+					</div>
+				{/if}
 				<div class="button-row">
 					<button class="btn btn-secondary" onclick={() => setView('setup')}>Edit plan settings</button>
 				</div>
