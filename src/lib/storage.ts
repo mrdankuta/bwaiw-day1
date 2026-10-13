@@ -51,50 +51,29 @@ export function deserializeSnapshot(json: string | null): PlannerSnapshot | null
 	return value as unknown as PlannerSnapshot;
 }
 
-interface KeyValueStore {
-	getItem(key: string): string | null;
-	setItem(key: string, value: string): void;
-	removeItem(key: string): void;
-}
-
-function resolveStore(explicit?: KeyValueStore): KeyValueStore | null {
-	if (explicit) return explicit;
-	if (typeof localStorage === 'undefined') return null;
-	return localStorage;
-}
-
-function createStoreAdapter(store?: KeyValueStore): StorageAdapter {
-	let memory: string | null = null;
-	const memoryStore: KeyValueStore = {
-		getItem: () => memory,
-		setItem: (_key, value) => {
-			memory = value;
-		},
-		removeItem: () => {
-			memory = null;
-		}
-	};
+/** Browser adapter: localStorage under ONE versioned key. SSR-safe (no-op without localStorage). */
+export function createLocalStorageAdapter(): StorageAdapter {
 	return {
 		load(): PlannerSnapshot | null {
-			const backend = resolveStore(store) ?? memoryStore;
 			try {
-				return deserializeSnapshot(backend.getItem(STORAGE_KEY));
+				if (typeof localStorage === 'undefined') return null;
+				return deserializeSnapshot(localStorage.getItem(STORAGE_KEY));
 			} catch {
 				return null;
 			}
 		},
 		save(snapshot: PlannerSnapshot): void {
-			const backend = resolveStore(store) ?? memoryStore;
 			try {
-				backend.setItem(STORAGE_KEY, serializeSnapshot(snapshot));
+				if (typeof localStorage === 'undefined') return;
+				localStorage.setItem(STORAGE_KEY, serializeSnapshot(snapshot));
 			} catch {
 				// Storage full or unavailable — the app keeps working in memory.
 			}
 		},
 		clear(): void {
-			const backend = resolveStore(store) ?? memoryStore;
 			try {
-				backend.removeItem(STORAGE_KEY);
+				if (typeof localStorage === 'undefined') return;
+				localStorage.removeItem(STORAGE_KEY);
 			} catch {
 				// Ignore: nothing persisted to wipe.
 			}
@@ -102,21 +81,18 @@ function createStoreAdapter(store?: KeyValueStore): StorageAdapter {
 	};
 }
 
-/** Browser adapter: localStorage under ONE versioned key. SSR-safe (no-op without localStorage). */
-export function createLocalStorageAdapter(): StorageAdapter {
-	return createStoreAdapter();
-}
-
 /** In-memory adapter for tests and non-browser runtimes. */
 export function createMemoryAdapter(): StorageAdapter {
 	const backing = new Map<string, string>();
-	return createStoreAdapter({
-		getItem: (key) => backing.get(key) ?? null,
-		setItem: (key, value) => {
-			backing.set(key, value);
+	return {
+		load(): PlannerSnapshot | null {
+			return deserializeSnapshot(backing.get(STORAGE_KEY) ?? null);
 		},
-		removeItem: (key) => {
-			backing.delete(key);
+		save(snapshot: PlannerSnapshot): void {
+			backing.set(STORAGE_KEY, serializeSnapshot(snapshot));
+		},
+		clear(): void {
+			backing.delete(STORAGE_KEY);
 		}
-	});
+	};
 }

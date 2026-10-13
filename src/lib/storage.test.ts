@@ -20,7 +20,7 @@ function snapshot(): PlannerSnapshot {
 			questionsBySubject: { mathematics: [{ id: 'q-1', title: 'm1', topic: 'General' }] },
 			subjectIds: ['mathematics'],
 			subjectNames: { mathematics: 'Mathematics' },
-			days: 2,
+			totalDays: 2,
 			hours: 2
 		}),
 		activeDay: 1,
