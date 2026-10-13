@@ -13,7 +13,7 @@
 		SUBJECTS
 	} from '../lib/subjects';
 	import { DEFAULT_TOPIC, makeId, type SetupQuestion } from '../lib/setup';
-	import { generatePlan, type StudyPlan } from '../lib/plan';
+	import { generatePlan, replanRemaining, type StudyPlan } from '../lib/plan';
 	import { overallProgress, perSubjectProgress } from '../lib/progress';
 	import { createLocalStorageAdapter, type PlannerSnapshot } from '../lib/storage';
 
@@ -142,6 +142,12 @@
 		}
 	}
 
+	function replan(): void {
+		if (!plan) return;
+		plan = replanRemaining(plan, activeDay);
+		showToast('Remaining tasks redistributed across your days.');
+	}
+
 	function clearSetup(): void {
 		selected = [...DEFAULT_SELECTED];
 		days = DEFAULT_DAYS;
@@ -264,6 +270,7 @@
 						<h2>Build your plan</h2>
 						<p class="panel-note">Choose your subjects and tell us what time you can give them.</p>
 					</div>
+					<button class="btn btn-secondary" type="button" onclick={replan}>Replan remaining</button>
 				</div>
 				<div class="setup-grid">
 					<div>
@@ -385,6 +392,7 @@
 							{/if}
 						</p>
 					</div>
+					<button class="btn btn-secondary" type="button" onclick={replan}>Replan remaining</button>
 				</div>
 				{#if plan && currentDay()}
 					{@const done = planDone()}
@@ -472,6 +480,7 @@
 						<h2>Your progress</h2>
 						<p class="panel-note">A clear view of what’s complete and what still needs time.</p>
 					</div>
+					<button class="btn btn-secondary" type="button" onclick={replan}>Replan remaining</button>
 				</div>
 				{#if plan}
 					<div class="progress-overview">

@@ -92,3 +92,36 @@ export function generatePlan(input: GeneratePlanInput): StudyPlan {
 	}
 	return { subjectIds, days: planDays, hours, generatedAt: Date.now() };
 }
+
+/** Pure replan: keep done tasks in place, redistribute incomplete
+ * non-revision tasks round-robin across the active day through the
+ * day before revision; the revision day stays last and intact. */
+export function replanRemaining(plan: StudyPlan, activeDayIndex: number): StudyPlan {
+	const total = plan.days.length;
+	const start = Math.max(0, Math.min(Math.floor(activeDayIndex) || 0, total - 1));
+	const finalIndex = total - 1;
+
+	const kept: PlanTask[][] = plan.days.map((day) =>
+		day.tasks.filter((task) => task.done || task.isRevision).map((task) => ({ ...task }))
+	);
+	const pending: PlanTask[] = plan.days.flatMap((day) =>
+		day.tasks.filter((task) => !task.done && !task.isRevision).map((task) => ({ ...task }))
+	);
+
+	const openStudyDays: number[] = [];
+	for (let i = start; i < finalIndex; i++) openStudyDays.push(i);
+	if (!openStudyDays.length) openStudyDays.push(finalIndex);
+	pending.forEach((task, i) => {
+		kept[openStudyDays[i % openStudyDays.length]].push(task);
+	});
+
+	const days: PlanDay[] = plan.days.map((day, index) => {
+		const tasks = kept[index];
+		const minutesEach = Math.max(5, Math.floor((plan.hours * 60) / Math.max(tasks.length, 1)));
+		for (const task of tasks) {
+			if (!task.done) task.minutes = minutesEach;
+		}
+		return { isRevision: day.isRevision, tasks };
+	});
+	return { subjectIds: [...plan.subjectIds], days, hours: plan.hours, generatedAt: plan.generatedAt };
+}
