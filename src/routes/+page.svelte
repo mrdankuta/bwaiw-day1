@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { onMount } from 'svelte';
 	import { splitQuestions } from '../lib/splitter';
 	import {
 		DEFAULT_DAYS,
@@ -13,6 +14,8 @@
 	} from '../lib/subjects';
 	import { DEFAULT_TOPIC, makeId, type SetupQuestion } from '../lib/setup';
 	import { generatePlan, type StudyPlan } from '../lib/plan';
+	import { overallProgress, perSubjectProgress } from '../lib/progress';
+	import { createLocalStorageAdapter, type PlannerSnapshot } from '../lib/storage';
 
 	type View = 'setup' | 'plan' | 'progress';
 	const VIEWS: View[] = ['setup', 'plan', 'progress'];
@@ -28,6 +31,11 @@
 	let activeDay: number = $state(0);
 	let toast: string = $state('');
 	let toastTimer: ReturnType<typeof setTimeout> | undefined;
+	let hydrated: boolean = $state(false);
+	const storage = createLocalStorageAdapter();
+
+	const overall = $derived(overallProgress(plan));
+	const subjectRows = $derived(perSubjectProgress(plan));
 
 	function subjectName(id: string): string {
 		return SUBJECTS.find((s) => s.id === id)?.name ?? id;
@@ -143,6 +151,7 @@
 		error = '';
 		plan = null;
 		activeDay = 0;
+		storage.clear();
 		showToast('Setup cleared.');
 	}
 
@@ -165,12 +174,48 @@
 		setView(next);
 		document.querySelector<HTMLElement>(`[data-view="${next}"]`)?.focus();
 	}
+
+	function takeSnapshot(): PlannerSnapshot {
+		return {
+			version: 1,
+			selected,
+			days,
+			hours,
+			drafts,
+			questions,
+			plan,
+			activeDay,
+			view
+		};
+	}
+
+	function restoreSnapshot(saved: PlannerSnapshot): void {
+		selected = [...saved.selected];
+		days = saved.days;
+		hours = saved.hours;
+		drafts = { ...saved.drafts };
+		questions = { ...saved.questions };
+		plan = saved.plan;
+		view = saved.view;
+		activeDay = plan ? Math.max(0, Math.min(saved.activeDay, plan.days.length - 1)) : 0;
+	}
+
+	onMount(() => {
+		const saved = storage.load();
+		if (saved) restoreSnapshot(saved);
+		hydrated = true;
+	});
+
+	$effect(() => {
+		if (!hydrated) return;
+		storage.save(takeSnapshot());
+	});
 </script>
 
 <header class="topbar">
 	<div class="container topbar-inner">
 		<a class="brand" href="/" aria-label="Daymark home"><span class="brand-mark" aria-hidden="true">D</span>daymark</a>
-		<span class="save-state"><span class="save-dot" aria-hidden="true"></span><span>WAEC revision planner</span></span>
+		<span class="save-state"><span class="save-dot" aria-hidden="true"></span><span>Saved on this device</span></span>
 	</div>
 </header>
 
@@ -428,7 +473,50 @@
 						<p class="panel-note">A clear view of what’s complete and what still needs time.</p>
 					</div>
 				</div>
-				<div class="empty-state">Generate a plan first to see your progress by subject.</div>
+				{#if plan}
+					<div class="progress-overview">
+						<div>
+							<div class="progress-number">{overall.percent}%</div>
+							<div class="progress-caption">{overall.done} of {overall.total} tasks complete</div>
+						</div>
+						<div>
+							<div
+								class="progress-track"
+								role="progressbar"
+								aria-label="Overall progress"
+								aria-valuemin="0"
+								aria-valuemax="100"
+								aria-valuenow={overall.percent}
+							>
+								<div class="progress-fill" style="width: {overall.percent}%"></div>
+							</div>
+							<p class="progress-caption">
+								Keep moving through the checklist. Your completed work is saved automatically.
+							</p>
+						</div>
+					</div>
+					<div class="subject-progress-list">
+						{#each subjectRows as row (row.subjectId)}
+							<div>
+								<div class="subject-progress-top">
+									<span>{row.subjectName}</span><span>{row.done}/{row.total} · {row.percent}%</span>
+								</div>
+								<div
+									class="progress-track"
+									role="progressbar"
+									aria-label="{row.subjectName} progress"
+									aria-valuemin="0"
+									aria-valuemax="100"
+									aria-valuenow={row.percent}
+								>
+									<div class="progress-fill subject-fill" style="width: {row.percent}%"></div>
+								</div>
+							</div>
+						{/each}
+					</div>
+				{:else}
+					<div class="empty-state">Generate a plan first to see your progress by subject.</div>
+				{/if}
 				<div class="button-row">
 					<button class="btn btn-secondary" onclick={() => setView('plan')}>Open daily plan</button>
 				</div>
