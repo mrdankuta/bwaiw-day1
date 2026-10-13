@@ -1,18 +1,21 @@
+export type ExamBoard = 'WAEC' | 'JAMB' | 'NECO' | 'GCSE';
+
 export interface Subject {
 	id: string;
 	name: string;
+	exam: ExamBoard;
 }
 
 export const SUBJECTS: Subject[] = [
-	{ id: 'mathematics', name: 'Mathematics' },
-	{ id: 'english', name: 'English Language' },
-	{ id: 'biology', name: 'Biology' },
-	{ id: 'chemistry', name: 'Chemistry' },
-	{ id: 'physics', name: 'Physics' },
-	{ id: 'economics', name: 'Economics' },
-	{ id: 'government', name: 'Government' },
-	{ id: 'geography', name: 'Geography' },
-	{ id: 'commerce', name: 'Commerce' }
+	{ id: 'mathematics', name: 'Mathematics', exam: 'WAEC' },
+	{ id: 'english', name: 'English Language', exam: 'WAEC' },
+	{ id: 'biology', name: 'Biology', exam: 'WAEC' },
+	{ id: 'chemistry', name: 'Chemistry', exam: 'WAEC' },
+	{ id: 'physics', name: 'Physics', exam: 'WAEC' },
+	{ id: 'economics', name: 'Economics', exam: 'WAEC' },
+	{ id: 'government', name: 'Government', exam: 'WAEC' },
+	{ id: 'geography', name: 'Geography', exam: 'WAEC' },
+	{ id: 'commerce', name: 'Commerce', exam: 'WAEC' }
 ];
 
 export const DEFAULT_SELECTED = ['mathematics', 'english', 'biology'];

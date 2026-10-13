@@ -1,5 +1,14 @@
 import { describe, expect, it } from 'vitest';
-import { SAMPLE_QUESTIONS } from './subjects';
+import { SAMPLE_QUESTIONS, SUBJECTS } from './subjects';
+
+describe('subject catalog', () => {
+	it('tags every subject with its exam board so other exams can extend the catalog', () => {
+		expect(SUBJECTS.length).toBeGreaterThan(0);
+		for (const subject of SUBJECTS) {
+			expect(subject.exam).toBe('WAEC');
+		}
+	});
+});
 
 describe('seeded samples', () => {
 	for (const subjectId of ['mathematics', 'english', 'biology']) {
